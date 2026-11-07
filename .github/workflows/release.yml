@@ -1,0 +1,52 @@
+name: Release
+
+on:
+    push:
+        tags: ["v*"]
+
+permissions:
+    contents: read
+
+jobs:
+    validate:
+        name: Validate tag
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+            - name: Tag must match package.json
+              run: |
+                  version="$(node -p "require('./package.json').version")"
+                  if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+                      echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+                      exit 1
+                  fi
+            - name: Changelog must contain the release
+              run: grep -q "^## ${GITHUB_REF_NAME#v}" CHANGELOG.md
+
+    package:
+        name: Package
+        needs: validate
+        uses: ./.github/workflows/package.yml
+        with:
+            retention-days: 5
+
+    publish:
+        name: Publish GitHub release
+        needs: package
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/checkout@v7
+            - uses: actions/download-artifact@v8
+              with:
+                  path: dist
+                  merge-multiple: true
+            - name: Extract release notes
+              run: awk -v version="${GITHUB_REF_NAME#v}" '/^## /{ printing = ($2 == version); next } printing' CHANGELOG.md > release-notes.md
+            - uses: softprops/action-gh-release@v3
+              with:
+                  name: Vencord Util ${{ github.ref_name }}
+                  body_path: release-notes.md
+                  files: dist/*
+                  fail_on_unmatched_files: true
