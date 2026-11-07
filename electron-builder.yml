@@ -7,12 +7,13 @@ directories:
 files:
     - out/**/*
     - build/icon.png
+    - build/icon-win.png
     - package.json
 asar: true
 publish: null
 
 win:
-    icon: build/icon.png
+    icon: build/icon-win.png
     target:
         - target: nsis
           arch: [x64, arm64]

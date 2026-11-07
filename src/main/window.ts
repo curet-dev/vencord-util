@@ -16,7 +16,7 @@ export function createMainWindow() {
         title: "Vencord Util",
         titleBarStyle: "hidden",
         ...(isMac ? { trafficLightPosition: { x: 18, y: 17 } } : { titleBarOverlay: { color: BACKGROUND, symbolColor: "#a1a1a1", height: TITLE_BAR_HEIGHT } }),
-        icon: join(__dirname, "../../build/icon.png"),
+        icon: join(__dirname, "../../build", isMac ? "icon.png" : "icon-win.png"),
         webPreferences: {
             preload: join(__dirname, "../preload/index.js"),
             contextIsolation: true,
