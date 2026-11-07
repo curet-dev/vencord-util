@@ -1,0 +1,44 @@
+appId: com.vencordutil.app
+productName: Vencord Util
+copyright: Copyright © curet-dev – GPL-3.0-or-later
+directories:
+    output: release
+    buildResources: build
+files:
+    - out/**/*
+    - build/icon.png
+    - package.json
+asar: true
+publish: null
+
+win:
+    icon: build/icon.png
+    target:
+        - target: nsis
+          arch: [x64, arm64]
+        - target: portable
+          arch: [x64]
+
+nsis:
+    oneClick: false
+    perMachine: false
+    allowToChangeInstallationDirectory: true
+    createDesktopShortcut: true
+    shortcutName: Vencord Util
+    artifactName: VencordUtil-${version}-win-${arch}-setup.${ext}
+
+portable:
+    artifactName: VencordUtil-${version}-win-${arch}-portable.${ext}
+
+mac:
+    icon: build/icon.png
+    category: public.app-category.utilities
+    target:
+        - target: dmg
+          arch: [universal]
+    identity: "-"
+    hardenedRuntime: false
+    artifactName: VencordUtil-${version}-mac-${arch}.${ext}
+
+dmg:
+    title: Vencord Util ${version}
