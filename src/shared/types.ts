@@ -21,6 +21,32 @@ export interface AppInfo {
     version: string;
     platform: string;
     arch: string;
+    packaged: boolean;
+}
+
+export type AppUpdateInstallKind = "setup" | "portable" | "dmg" | "manual";
+
+export interface AppUpdateInfo {
+    current: string;
+    version: string;
+    minimumVersion?: string;
+    mandatory: boolean;
+    notes?: string;
+    releaseDate?: string;
+    pageUrl: string;
+    install: AppUpdateInstallKind;
+    size?: number;
+}
+
+export type AppUpdatePhase = "idle" | "checking" | "current" | "available" | "downloading" | "installing" | "error";
+
+export interface AppUpdateState {
+    phase: AppUpdatePhase;
+    info?: AppUpdateInfo;
+    received?: number;
+    total?: number;
+    error?: string;
+    checkedAt?: number;
 }
 
 export type DiscordBranch = "stable" | "ptb" | "canary" | "development";
@@ -100,6 +126,36 @@ export interface PluginUpdateStatus {
     error?: string;
 }
 
+export interface CompatIssue {
+    file: string;
+    line: number;
+    module: string;
+    name?: string;
+}
+
+export interface PluginCompat {
+    id: string;
+    name?: string;
+    issues: CompatIssue[];
+}
+
+export interface CompatReport {
+    /** Plugins that use Vencord functions the installed version does not have. */
+    current: PluginCompat[];
+    /** Plugins that use Vencord functions the pending update removes. */
+    update?: { target: string; plugins: PluginCompat[] };
+}
+
+export interface BuildIssue {
+    file: string;
+    line?: number;
+    message: string;
+}
+
+export interface PluginLinkResult {
+    upToDate: boolean;
+}
+
 export interface UserPlugin {
     id: string;
     kind: "folder" | "file";
@@ -113,6 +169,7 @@ export interface UserPlugin {
     updatable: boolean;
     source?: PluginSource;
     update?: PluginUpdateStatus;
+    buildIssues?: BuildIssue[];
 }
 
 export interface StagedCandidate {
@@ -148,6 +205,7 @@ export interface AppConfig {
     pluginUpdates: Record<string, PluginUpdateStatus>;
     lastPluginCheck?: number;
     lastUpdate?: UpdateInfo;
+    buildIssues?: Record<string, BuildIssue[]>;
     onboarded: boolean;
 }
 
@@ -178,6 +236,7 @@ export interface TaskState {
     endedAt?: number;
     error?: string;
     hint?: string;
+    brokenPlugins?: string[];
 }
 
 export interface TaskResult<T = void> {
@@ -199,4 +258,8 @@ export interface LogLine {
 
 export type ChangeScope = "config" | "env" | "discord" | "vencord" | "plugins";
 
-export type AppEvent = { type: "log"; line: LogLine } | { type: "task"; task: TaskState } | { type: "changed"; scope: ChangeScope[] };
+export type AppEvent =
+    | { type: "log"; line: LogLine }
+    | { type: "task"; task: TaskState }
+    | { type: "changed"; scope: ChangeScope[] }
+    | { type: "appUpdate"; state: AppUpdateState };

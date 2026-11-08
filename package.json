@@ -1,7 +1,8 @@
 {
   "name": "vencord-util",
   "productName": "Vencord Util",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "minimumVersion": "0.1.0",
   "description": "A desktop app to install, update and extend Vencord from source",
   "main": "./out/main/index.js",
   "author": "curet-dev",

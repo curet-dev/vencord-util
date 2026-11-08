@@ -1,4 +1,16 @@
-import type { AppConfig, DiscordInstall, EnvStatus, LogLine, StageResult, TaskResult, TaskState, UserPlugin, VencordStatus } from "@shared/types";
+import type {
+    AppConfig,
+    AppUpdateState,
+    CompatReport,
+    DiscordInstall,
+    EnvStatus,
+    LogLine,
+    StageResult,
+    TaskResult,
+    TaskState,
+    UserPlugin,
+    VencordStatus
+} from "@shared/types";
 import { create } from "zustand";
 
 export type Page = "dashboard" | "install" | "plugins" | "console" | "settings";
@@ -24,10 +36,14 @@ interface State {
     loaded: Record<Scope, boolean>;
     stage: StageResult | null;
     logOpen: boolean;
+    compat: CompatReport | null;
+    appUpdate: AppUpdateState;
+    appUpdateDismissed: boolean;
     setPage(p: Page): void;
     setStage(s: StageResult | null): void;
     setLogOpen(open: boolean): void;
     refresh(...scopes: Scope[]): Promise<void>;
+    refreshCompat(): Promise<CompatReport | null>;
     toast(t: Omit<Toast, "id">): void;
     dismissToast(id: number): void;
 }
@@ -48,6 +64,9 @@ export const useStore = create<State>((set, get) => ({
     loaded: { config: false, env: false, discord: false, vencord: false, plugins: false },
     stage: null,
     logOpen: false,
+    compat: null,
+    appUpdate: { phase: "idle" },
+    appUpdateDismissed: false,
     setPage: page => set({ page }),
     setStage: stage => set({ stage }),
     setLogOpen: logOpen => set({ logOpen }),
@@ -87,6 +106,17 @@ export const useStore = create<State>((set, get) => ({
         await Promise.all(jobs);
     },
 
+    async refreshCompat() {
+        try {
+            const compat = await window.vu.vencord.compat();
+            set({ compat });
+            return compat;
+        } catch (e) {
+            console.error("compatibility check", e);
+            return null;
+        }
+    },
+
     toast(t) {
         const id = toastId++;
         set(st => ({ toasts: [...st.toasts, { ...t, id }].slice(-4) }));
@@ -116,6 +146,7 @@ export function initStore() {
     st.refresh();
     window.vu.getLogs().then(logs => useStore.setState({ logs }));
     window.vu.currentTask().then(task => task && useStore.setState({ task }));
+    window.vu.appUpdate.state().then(appUpdate => useStore.setState({ appUpdate }));
 
     return window.vu.onEvent(e => {
         if (e.type === "log") {
@@ -132,6 +163,8 @@ export function initStore() {
             }
         } else if (e.type === "changed") {
             scheduleRefresh(e.scope);
+        } else if (e.type === "appUpdate") {
+            useStore.setState({ appUpdate: e.state });
         }
     });
 }

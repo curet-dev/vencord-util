@@ -1,7 +1,20 @@
 import type { PluginInstallOutcome, TaskResult } from "@shared/types";
+import { summarizeCompat } from "./components/PluginIssues";
 import { act, useStore } from "./store";
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+/** Warns right after installing when a plugin needs Vencord functions the installed version does not have. */
+export async function warnIfIncompatible(ids: string[]) {
+    const report = await useStore.getState().refreshCompat();
+    const broken = report?.current.filter(plugin => ids.includes(plugin.id)) ?? [];
+    if (!broken.length) return;
+    useStore.getState().toast({
+        kind: "error",
+        title: `${broken.map(plugin => plugin.name ?? plugin.id).join(", ")} ${broken.length === 1 ? "is" : "are"} not compatible with your Vencord version`,
+        text: [...broken.map(summarizeCompat), "The build will fail – update Vencord or the plugin, or disable it."].join("\n")
+    });
+}
 
 function handleOutcome(result: TaskResult<PluginInstallOutcome>) {
     const { toast, setStage } = useStore.getState();
@@ -14,6 +27,7 @@ function handleOutcome(result: TaskResult<PluginInstallOutcome>) {
             title: `Installed: ${result.data.installed.join(", ")}`,
             text: "Rebuild Vencord so Discord picks up the changes."
         });
+        warnIfIncompatible(result.data.installed);
     }
 }
 

@@ -11,6 +11,12 @@ const invoke =
 const api: VuApi = {
     platform: process.platform,
     info: invoke("app:info"),
+    quit: invoke("app:quit"),
+    appUpdate: {
+        state: invoke("appUpdate:state"),
+        check: invoke("appUpdate:check"),
+        install: invoke("appUpdate:install")
+    },
     getConfig: invoke("config:get"),
     setConfig: invoke("config:set"),
     getLogs: invoke("logs:get"),
@@ -38,7 +44,8 @@ const api: VuApi = {
         deps: invoke("vencord:deps"),
         build: invoke("vencord:build"),
         checkUpdates: invoke("vencord:checkUpdates"),
-        update: invoke("vencord:update")
+        update: invoke("vencord:update"),
+        compat: invoke("vencord:compat")
     },
     plugins: {
         list: invoke("plugins:list"),
@@ -50,7 +57,8 @@ const api: VuApi = {
         setEnabled: invoke("plugins:setEnabled"),
         checkUpdates: invoke("plugins:checkUpdates"),
         update: invoke("plugins:update"),
-        updateAll: invoke("plugins:updateAll")
+        updateAll: invoke("plugins:updateAll"),
+        linkSource: invoke("plugins:linkSource")
     },
     getPathForFile: file => webUtils.getPathForFile(file),
     onEvent(listener) {

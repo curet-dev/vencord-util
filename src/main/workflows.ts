@@ -1,13 +1,17 @@
 import type { InstallOptions, PluginInstallOutcome, StageResult, ToolName } from "@shared/types";
 import { getConfig, setConfig } from "./core/config";
-import { UserError } from "./core/errors";
+import { PluginBuildError, UserError } from "./core/errors";
 import { notifyChanged } from "./core/events";
 import { refreshPath } from "./core/path";
 import { runTask, type TaskContext } from "./core/tasks";
 import { getEnvStatus, installTool, toolLabel } from "./core/tools";
 import { closeDiscord, getInstall, injectVencord, launchDiscord, listDiscordInstalls, removeVencord } from "./discord/discord";
+import { describePlugin, locatePlugin } from "./plugins/library";
+import { linkPluginSource } from "./plugins/link";
 import { commitStaging, stageFromPaths, stageFromUrl } from "./plugins/staging";
 import { pluginsToUpdate, updatePlugin } from "./plugins/updates";
+import { explainBuildFailure } from "./vencord/buildErrors";
+import { describePluginCompat, getCompatReport } from "./vencord/compatReport";
 import { buildVencord, cloneVencord, installDependencies, pullVencord } from "./vencord/repo";
 
 const PLUGIN_STEPS = [
@@ -36,9 +40,44 @@ async function injectInto(ids: string[], ctx: TaskContext) {
     notifyChanged("discord");
 }
 
+const pluginLabel = (id: string) => {
+    try {
+        return describePlugin(id, locatePlugin(id))?.name ?? id;
+    } catch {
+        return id;
+    }
+};
+
+/** Builds Vencord and remembers which user plugins broke the build, so the plugin list can point them out. */
+async function build(ctx: TaskContext) {
+    try {
+        await buildVencord(ctx);
+    } catch (error) {
+        const explained = explainBuildFailure(error, pluginLabel);
+        if (explained instanceof PluginBuildError) {
+            setConfig({ buildIssues: explained.issues });
+            notifyChanged("plugins", "config");
+        }
+        throw explained;
+    }
+    if (Object.keys(getConfig().buildIssues ?? {}).length) {
+        setConfig({ buildIssues: {} });
+        notifyChanged("plugins", "config");
+    }
+}
+
+async function warnAboutIncompatiblePlugins(ctx: TaskContext) {
+    try {
+        const report = await getCompatReport();
+        for (const plugin of report?.update?.plugins ?? []) ctx.log(`⚠ ${describePluginCompat(plugin)} – the update removes it.`, "warn");
+    } catch (error) {
+        console.warn("Compatibility check failed", error);
+    }
+}
+
 async function buildAndMaybeRestart(ctx: TaskContext, restart: boolean) {
     ctx.step("build");
-    await buildVencord(ctx);
+    await build(ctx);
     if (!restart) return;
     ctx.step("restart");
     if (!(await restartSourceInstalls(ctx))) ctx.step("restart", "skipped", "no injected installation");
@@ -119,7 +158,7 @@ export const installVencordTask = (options: InstallOptions) =>
             await installDependencies(ctx);
 
             ctx.step("build");
-            await buildVencord(ctx);
+            await build(ctx);
 
             if (options.inject && options.targets.length) {
                 ctx.step("inject");
@@ -164,6 +203,7 @@ export const updateVencordTask = (stash: boolean) =>
         ],
         async ctx => {
             ctx.step("pull");
+            await warnAboutIncompatiblePlugins(ctx);
             if (!(await pullVencord(ctx, stash))) ctx.log("No new commits – rebuilding anyway.");
             ctx.step("deps");
             await installDependencies(ctx);
@@ -189,6 +229,17 @@ export const addPluginFromUrlTask = (url: string) =>
 
 export const addPluginFromPathsTask = (paths: string[]) =>
     runTask("Install plugin from file", PLUGIN_STEPS.slice(1), async ctx => completeStage(await stageFromPaths(paths, ctx), ctx));
+
+export const linkPluginSourceTask = (id: string, url: string) =>
+    runTask(
+        "Link plugin repository",
+        [
+            { id: "fetch", label: "Download" },
+            { id: "analyze", label: "Find plugin" },
+            { id: "link", label: "Compare & link" }
+        ],
+        async ctx => linkPluginSource(id, url, ctx)
+    );
 
 export const updatePluginTask = (id: string) =>
     runTask("Update plugin", [{ id: "update", label: id }], async ctx => {

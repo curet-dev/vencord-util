@@ -11,6 +11,11 @@ files:
     - package.json
 asar: true
 publish: null
+# The UI is English – only ship Chromium's English and German strings (saves ~47 MB of locale files).
+electronLanguages:
+    - en-US
+    - de
+compression: maximum
 
 win:
     icon: build/icon-win.png
@@ -26,6 +31,8 @@ nsis:
     allowToChangeInstallationDirectory: true
     createDesktopShortcut: true
     shortcutName: Vencord Util
+    # One installer per architecture instead of an additional ~240 MB installer that contains both.
+    buildUniversalInstaller: false
     artifactName: VencordUtil-${version}-win-${arch}-setup.${ext}
 
 portable:
@@ -35,8 +42,9 @@ mac:
     icon: build/icon.png
     category: public.app-category.utilities
     target:
+        # Separate Intel and Apple Silicon images – a universal build contains both and is twice as large.
         - target: dmg
-          arch: [universal]
+          arch: [x64, arm64]
     identity: "-"
     hardenedRuntime: false
     artifactName: VencordUtil-${version}-mac-${arch}.${ext}

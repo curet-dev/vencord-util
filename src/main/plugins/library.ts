@@ -34,7 +34,7 @@ export function locatePlugin(id: string): PluginLocation {
 export const isUpdatable = (plugin: Pick<UserPlugin, "isGit" | "source">) => plugin.isGit || (Boolean(plugin.source?.url) && plugin.source?.type !== "local");
 
 export function describePlugin(id: string, { path, enabled }: PluginLocation): UserPlugin | null {
-    const { plugins, pluginUpdates } = getConfig();
+    const { plugins, pluginUpdates, buildIssues } = getConfig();
     const folder = isDir(path);
     if (!folder && (!CODE_FILE.test(id) || /\.d\.ts$/i.test(id))) return null;
 
@@ -54,7 +54,8 @@ export function describePlugin(id: string, { path, enabled }: PluginLocation): U
         hasNative: folder && NATIVE_FILES.some(file => existsSync(join(path, file))),
         updatable: isUpdatable({ isGit, source }),
         source,
-        update: pluginUpdates[id]
+        update: pluginUpdates[id],
+        buildIssues: buildIssues?.[id]
     };
 }
 
@@ -87,9 +88,18 @@ export function savePluginSource(id: string, source: PluginSource | undefined) {
     setConfig({ plugins: nextPlugins, pluginUpdates: nextUpdates });
 }
 
+export function clearBuildIssues(id: string) {
+    const { buildIssues } = getConfig();
+    if (!buildIssues?.[id]) return;
+    const next = { ...buildIssues };
+    delete next[id];
+    setConfig({ buildIssues: next });
+}
+
 export function removePlugin(id: string) {
     removePath(locatePlugin(id).path);
     savePluginSource(id, undefined);
+    clearBuildIssues(id);
     setConfig({ needsRebuild: true });
     notifyChanged("plugins", "config");
 }

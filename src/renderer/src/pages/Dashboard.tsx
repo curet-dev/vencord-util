@@ -1,7 +1,9 @@
-import { AlertTriangle, ArrowDownToLine, CheckCircle2, FolderOpen, Hammer, Puzzle, RefreshCw, Rocket, Syringe, XCircle } from "lucide-react";
+import type { PluginCompat } from "@shared/types";
+import { AlertTriangle, ArrowDownToLine, Ban, CheckCircle2, FolderOpen, Hammer, Puzzle, RefreshCw, Rocket, Syringe, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { buildAndRestart, checkPluginUpdates, checkUpdates } from "../actions";
 import { DiscordRow } from "../components/DiscordRow";
+import { CompatIssueList, summarizeCompat } from "../components/PluginIssues";
 import { RebuildBanner } from "../components/RebuildBanner";
 import { TaskPanel } from "../components/TaskView";
 import { Badge, Button, confirmDialog, formatDate, timeAgo } from "../components/ui";
@@ -11,6 +13,55 @@ const AUTO_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 const DISCORD_POLL_MS = 8000;
 const RECENT_TASK_MS = 120_000;
 
+async function disablePlugins(plugins: PluginCompat[]) {
+    const { toast } = useStore.getState();
+    for (const plugin of plugins) {
+        const result = await window.vu.plugins.setEnabled(plugin.id, false);
+        if (!result.ok) {
+            toast({ kind: "error", title: result.error ?? `Could not disable ${plugin.name ?? plugin.id}`, text: result.hint });
+            return;
+        }
+    }
+    toast({ kind: "success", title: `Disabled ${plugins.map(plugin => plugin.name ?? plugin.id).join(", ")}` });
+}
+
+function IncompatiblePlugins({ plugins, upcoming }: { plugins: PluginCompat[]; upcoming: boolean }) {
+    const installed = useStore(s => s.plugins);
+    const setPage = useStore(s => s.setPage);
+    const busy = useBusy();
+    const updatable = plugins.filter(plugin => installed.find(entry => entry.id === plugin.id)?.update?.available);
+
+    return (
+        <div className={`callout ${upcoming ? "yellow" : "red"}`} style={{ marginTop: 16 }}>
+            {upcoming ? <AlertTriangle size={15} /> : <Ban size={15} />}
+            <div className="grow">
+                <div style={{ fontWeight: 500 }}>
+                    {upcoming
+                        ? plugins.length === 1
+                            ? "This update will probably break a plugin – Vencord removes functions it uses."
+                            : `This update will probably break ${plugins.length} plugins – Vencord removes functions they use.`
+                        : `${plugins.length === 1 ? "A plugin is" : `${plugins.length} plugins are`} not compatible with your Vencord version – the next build will fail.`}
+                </div>
+                {plugins.map(plugin => (
+                    <div key={plugin.id} style={{ marginTop: 8 }}>
+                        <b>{plugin.name ?? plugin.id}</b>
+                        {updatable.includes(plugin) && <span> · a plugin update is available and may fix this</span>}
+                        <CompatIssueList issues={plugin.issues} />
+                    </div>
+                ))}
+                <div className="row wrap" style={{ marginTop: 12, gap: 8 }}>
+                    <Button size="sm" icon={Ban} disabled={busy} onClick={() => disablePlugins(plugins)}>
+                        Disable {plugins.length === 1 ? "plugin" : "plugins"}
+                    </Button>
+                    <Button size="sm" variant="ghost" icon={Puzzle} onClick={() => setPage("plugins")}>
+                        {updatable.length ? "Update plugins" : "Review plugins"}
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function UpdateCard() {
     const update = useStore(s => s.config?.lastUpdate);
     const dirty = useStore(s => s.vencord?.dirty);
@@ -19,8 +70,24 @@ function UpdateCard() {
     const busy = useBusy();
     const [checking, setChecking] = useState(false);
     const behind = update?.behind ?? 0;
+    const breaking = useStore(s => s.compat?.update?.plugins) ?? [];
+    const upcoming = behind > 0 ? breaking : [];
 
     const runUpdate = async (stash: boolean) => {
+        if (upcoming.length) {
+            const confirmed = await confirmDialog({
+                title: "Update anyway?",
+                text: (
+                    <>
+                        {upcoming.map(summarizeCompat).join(". ")}. Vencord removes {upcoming.length === 1 ? "this function" : "these functions"} with the
+                        update, so the build will most likely fail until the {upcoming.length === 1 ? "plugin is" : "plugins are"} updated or disabled.
+                    </>
+                ),
+                confirm: "Update anyway",
+                danger: true
+            });
+            if (!confirmed) return;
+        }
         if (stash) {
             const confirmed = await confirmDialog({
                 title: "Stash local changes?",
@@ -84,6 +151,7 @@ function UpdateCard() {
                     Vencord.
                 </div>
             )}
+            {upcoming.length > 0 && <IncompatiblePlugins plugins={upcoming} upcoming />}
             {pluginUpdates > 0 && (
                 <div className="callout accent" style={{ marginTop: 16 }}>
                     <Puzzle size={15} />
@@ -139,6 +207,7 @@ export function DashboardPage() {
     const env = useStore(s => s.env);
     const task = useStore(s => s.task);
     const enabledPlugins = useStore(s => s.plugins.filter(plugin => plugin.enabled).length);
+    const incompatible = useStore(s => s.compat?.current) ?? [];
     const loaded = useStore(s => s.loaded);
     const refresh = useStore(s => s.refresh);
     const setPage = useStore(s => s.setPage);
@@ -230,6 +299,7 @@ export function DashboardPage() {
                             Latest commit: {vencord.commitMessage}
                         </div>
                     )}
+                    {incompatible.length > 0 && <IncompatiblePlugins plugins={incompatible} upcoming={false} />}
                     <div className="row wrap" style={{ marginTop: 20 }}>
                         <Button variant="primary" icon={Hammer} disabled={busy} onClick={() => buildAndRestart()}>
                             {config?.restartDiscordAfterBuild ? "Rebuild & restart" : "Rebuild"}

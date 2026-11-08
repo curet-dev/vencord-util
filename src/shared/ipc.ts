@@ -1,12 +1,15 @@
 import type {
     AppConfig,
     AppInfo,
+    AppUpdateState,
+    CompatReport,
     DiscordInstall,
     EditableConfig,
     EnvStatus,
     InstallOptions,
     LogLine,
     PluginInstallOutcome,
+    PluginLinkResult,
     TaskResult,
     TaskState,
     ToolName,
@@ -19,6 +22,10 @@ export const EVENT_CHANNEL = "vu:event";
 
 export interface IpcContract {
     "app:info": () => AppInfo;
+    "app:quit": () => void;
+    "appUpdate:state": () => AppUpdateState;
+    "appUpdate:check": () => AppUpdateState;
+    "appUpdate:install": () => TaskResult;
     "config:get": () => AppConfig;
     "config:set": (patch: EditableConfig) => AppConfig;
     "logs:get": () => LogLine[];
@@ -42,6 +49,7 @@ export interface IpcContract {
     "vencord:build": (restart?: boolean) => TaskResult;
     "vencord:checkUpdates": () => TaskResult<UpdateInfo>;
     "vencord:update": (options?: { stash?: boolean }) => TaskResult;
+    "vencord:compat": () => CompatReport | null;
     "plugins:list": () => UserPlugin[];
     "plugins:addUrl": (url: string) => TaskResult<PluginInstallOutcome>;
     "plugins:addPaths": (paths: string[]) => TaskResult<PluginInstallOutcome>;
@@ -52,6 +60,7 @@ export interface IpcContract {
     "plugins:checkUpdates": () => TaskResult<number>;
     "plugins:update": (id: string) => TaskResult<boolean>;
     "plugins:updateAll": () => TaskResult<number>;
+    "plugins:linkSource": (id: string, url: string) => TaskResult<PluginLinkResult>;
 }
 
 export type IpcChannel = keyof IpcContract;

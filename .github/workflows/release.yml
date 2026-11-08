@@ -22,6 +22,8 @@ jobs:
                   fi
             - name: Changelog must contain the release
               run: grep -q "^## ${GITHUB_REF_NAME#v}" CHANGELOG.md
+            - name: Minimum version must be valid
+              run: node scripts/release-manifest.mjs --check
 
     package:
         name: Package
@@ -44,6 +46,9 @@ jobs:
                   merge-multiple: true
             - name: Extract release notes
               run: awk -v version="${GITHUB_REF_NAME#v}" '/^## /{ printing = ($2 == version); next } printing' CHANGELOG.md > release-notes.md
+            # update.json tells installed apps about the release (in-app updater). It must be part of every release.
+            - name: Create update manifest
+              run: node scripts/release-manifest.mjs dist release-notes.md
             - uses: softprops/action-gh-release@v3
               with:
                   name: Vencord Util ${{ github.ref_name }}

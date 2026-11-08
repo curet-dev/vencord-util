@@ -25,7 +25,12 @@ export class ExecError extends Error {
     constructor(
         message: string,
         readonly code: number | null,
-        readonly output: string
+        /** The last lines of output. */
+        readonly output: string,
+        /** Whether the output was already streamed to the log. */
+        readonly logged = false,
+        /** Everything the process wrote to stdout and stderr (capped). */
+        readonly fullOutput = output
     ) {
         super(message);
         this.name = "ExecError";
@@ -144,9 +149,10 @@ export function exec(command: string, args: string[], options: ExecOptions = {})
             cleanup();
             for (const stream of ["out", "err"] as const) if (pending[stream]) emitLine(pending[stream]);
             const output = tail.join("\n");
-            if (signal?.aborted) reject(new ExecError("Cancelled", code, output));
-            else if (timedOut) reject(new ExecError(`Timed out: "${command}"`, code, output));
-            else if (code !== 0) reject(new ExecError(`"${[command, ...args].join(" ")}" failed with exit code ${code}`, code, output));
+            const fail = (message: string) => reject(new ExecError(message, code, output, !quiet, `${captured.out}\n${captured.err}`));
+            if (signal?.aborted) fail("Cancelled");
+            else if (timedOut) fail(`Timed out: "${command}"`);
+            else if (code !== 0) fail(`"${[command, ...args].join(" ")}" failed with exit code ${code}`);
             else resolve({ code: 0, stdout: captured.out, stderr: captured.err });
         });
     });

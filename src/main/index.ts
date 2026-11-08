@@ -6,6 +6,7 @@ import { cancelCurrentTask } from "./core/tasks";
 import { findExistingSourceDir } from "./discord/discord";
 import { registerIpc } from "./ipc";
 import { cleanStaging } from "./plugins/staging";
+import { checkAppUpdate } from "./updater";
 import { isVencordRepo } from "./vencord/repo";
 import { createMainWindow } from "./window";
 
@@ -41,6 +42,7 @@ if (!app.requestSingleInstanceLock()) {
         await refreshPath().catch(() => undefined);
         createMainWindow();
         adoptExistingClone().catch(error => console.error("Could not detect an existing Vencord clone", error));
+        if (app.isPackaged || process.env.VU_UPDATE_MANIFEST_URL) checkAppUpdate();
 
         app.on("activate", () => {
             if (BrowserWindow.getAllWindows().length === 0) createMainWindow();

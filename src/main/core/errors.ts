@@ -1,3 +1,5 @@
+import type { BuildIssue } from "@shared/types";
+
 export class UserError extends Error {
     constructor(
         message: string,
@@ -5,6 +7,22 @@ export class UserError extends Error {
     ) {
         super(message);
         this.name = "UserError";
+    }
+}
+
+/** A Vencord build that failed because of one or more user plugins. */
+export class PluginBuildError extends UserError {
+    constructor(
+        message: string,
+        hint: string,
+        readonly issues: Record<string, BuildIssue[]>
+    ) {
+        super(message, hint);
+        this.name = "PluginBuildError";
+    }
+
+    get brokenPlugins() {
+        return Object.keys(this.issues);
     }
 }
 

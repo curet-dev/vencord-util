@@ -1,6 +1,7 @@
 import { Terminal, UploadCloud } from "lucide-react";
 import { Component, type ComponentType, type ReactNode, useEffect, useRef, useState } from "react";
 import { handleDrop } from "./actions";
+import { AppUpdateModal } from "./components/AppUpdateModal";
 import { PluginSelectModal } from "./components/PluginSelectModal";
 import { LogDrawer, TaskPill } from "./components/TaskView";
 import { Button, ConfirmHost, Toasts } from "./components/ui";
@@ -186,12 +187,36 @@ function useWindowDrop() {
     return active;
 }
 
+/** Re-checks plugin compatibility whenever Vencord, the pending update or the set of plugins changes. */
+function useCompatWatcher() {
+    const key = useStore(s =>
+        s.vencord?.isVencord
+            ? [
+                  s.vencord.commit,
+                  s.config?.lastUpdate?.behind ?? 0,
+                  s.config?.lastUpdate?.checkedAt ?? 0,
+                  ...s.plugins.map(plugin => `${plugin.id}:${plugin.enabled}:${plugin.source?.updatedAt ?? plugin.source?.installedAt ?? ""}`)
+              ].join("|")
+            : ""
+    );
+
+    useEffect(() => {
+        if (!key) {
+            useStore.setState({ compat: null });
+            return;
+        }
+        const timer = setTimeout(() => useStore.getState().refreshCompat(), 400);
+        return () => clearTimeout(timer);
+    }, [key]);
+}
+
 export function App() {
     const page = useStore(s => s.page);
     const dropActive = useWindowDrop();
     const CurrentPage = PAGES[page];
 
     useEffect(() => initStore(), []);
+    useCompatWatcher();
 
     return (
         <div className={`app platform-${window.vu.platform}`}>
@@ -222,6 +247,7 @@ export function App() {
             )}
             <PluginSelectModal />
             <ConfirmHost />
+            <AppUpdateModal />
             <Toasts />
         </div>
     );

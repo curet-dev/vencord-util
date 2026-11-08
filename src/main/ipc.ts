@@ -13,6 +13,8 @@ import { listDiscordInstalls } from "./discord/discord";
 import { listPlugins, removePlugin, setPluginEnabled } from "./plugins/library";
 import { commitStaging, discardStaging } from "./plugins/staging";
 import { checkPluginUpdates } from "./plugins/updates";
+import { checkAppUpdate, getAppUpdateState, installAppUpdate } from "./updater";
+import { getCompatReport } from "./vencord/compatReport";
 import { checkVencordUpdates, getVencordStatus, isVencordRepo } from "./vencord/repo";
 import * as workflows from "./workflows";
 
@@ -69,7 +71,11 @@ function pickPluginFiles(mode: "file" | "folder") {
 }
 
 export function registerIpc() {
-    handle("app:info", () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch }));
+    handle("app:info", () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch, packaged: app.isPackaged }));
+    handle("app:quit", () => app.quit());
+    handle("appUpdate:state", getAppUpdateState);
+    handle("appUpdate:check", checkAppUpdate);
+    handle("appUpdate:install", () => attempt(installAppUpdate));
     handle("config:get", getConfig);
     handle("config:set", updateConfig);
     handle("logs:get", getLogs);
@@ -103,6 +109,7 @@ export function registerIpc() {
     handle("vencord:build", workflows.buildTask);
     handle("vencord:checkUpdates", () => attempt(checkVencordUpdates));
     handle("vencord:update", options => workflows.updateVencordTask(Boolean(options?.stash)));
+    handle("vencord:compat", () => getCompatReport().catch(() => null));
 
     handle("plugins:list", listPlugins);
     handle("plugins:addUrl", workflows.addPluginFromUrlTask);
@@ -114,4 +121,5 @@ export function registerIpc() {
     handle("plugins:checkUpdates", () => (isBusy() ? { ok: false, error: "Please wait until the current task has finished." } : attempt(checkPluginUpdates)));
     handle("plugins:update", workflows.updatePluginTask);
     handle("plugins:updateAll", workflows.updateAllPluginsTask);
+    handle("plugins:linkSource", workflows.linkPluginSourceTask);
 }

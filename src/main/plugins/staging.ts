@@ -66,16 +66,34 @@ function sourceFor(base: PluginSource, candidatePath: string, repo?: RepoContext
     return { ...base, type: "git-subdir", subdir, revision: repo.snapshot.objects.get(subdir), commit: repo.snapshot.commit };
 }
 
-function addCandidates(staging: Staging, root: string, rootName: string, base: PluginSource, repo?: RepoContext) {
+/** Folder names that say nothing about the plugin, e.g. a plugin living in "src" of its repository. */
+const GENERIC_FOLDER_NAMES = new Set(["src", "source", "plugin", "plugins", "dist", "lib", "index", "repo", "main", "master"]);
+
+/** "Cool Plugin" → "coolPlugin", the naming style of Vencord plugin folders. */
+export function folderNameFor(pluginName: string | undefined) {
+    const words = pluginName?.split(/[^A-Za-z0-9]+/).filter(Boolean) ?? [];
+    return words.map((word, index) => (index ? word[0].toUpperCase() : word[0].toLowerCase()) + word.slice(1)).join("");
+}
+
+export function pluginFolderName(folder: string, pluginName: string | undefined, fallback: string) {
+    if (!GENERIC_FOLDER_NAMES.has(folder.toLowerCase())) return sanitizeName(folder);
+    return sanitizeName(folderNameFor(pluginName) || fallback);
+}
+
+function addCandidates(staging: Staging, root: string, rootName: string, base: PluginSource, repo?: RepoContext, fallbackName = rootName) {
     for (const found of findPluginCandidates(root)) {
         const isRoot = resolve(found.path) === resolve(root);
         const extension = extname(found.path).toLowerCase();
+        const metaFile = found.kind === "file" ? found.path : findPluginIndex(found.path);
+        const meta = parsePluginMeta(metaFile ? readText(metaFile) : "");
         const targetName =
             found.kind === "file"
                 ? sanitizeName(basename(found.path, extname(found.path))) + extension
-                : sanitizeName(isRoot ? rootName : basename(found.path));
-        const metaFile = found.kind === "file" ? found.path : findPluginIndex(found.path);
-        const meta = parsePluginMeta(metaFile ? readText(metaFile) : "");
+                : pluginFolderName(
+                      isRoot ? rootName : basename(found.path),
+                      meta.name,
+                      isRoot || resolve(dirname(found.path)) === resolve(root) ? fallbackName : basename(dirname(found.path))
+                  );
 
         staging.candidates.push({
             id: String(staging.candidates.length),
@@ -133,7 +151,7 @@ async function stageRepository(staging: Staging, link: Extract<PluginLink, { kin
     ctx.step("analyze");
     const snapshot = await readSnapshot(repoDir);
     const base: PluginSource = { type: "git", url: link.cloneUrl, ref: ref ?? (snapshot.ref || undefined), installedAt: Date.now() };
-    addCandidates(staging, root, subdir ? basename(root) : link.name, base, { dir: repoDir, snapshot });
+    addCandidates(staging, root, subdir ? basename(root) : link.name, base, { dir: repoDir, snapshot }, link.name);
 }
 
 async function stageFile(staging: Staging, link: Extract<PluginLink, { kind: "file" }>, ctx: TaskContext) {

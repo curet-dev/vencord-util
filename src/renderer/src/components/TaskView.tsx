@@ -1,7 +1,8 @@
 import type { LogLine, StepStatus, TaskState } from "@shared/types";
-import { AlertTriangle, Ban, CheckCircle2, ChevronDown, Circle, CircleDot, Copy, Loader2, Square, Terminal, Trash2, XCircle } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, ChevronDown, Circle, CircleDot, Copy, Loader2, Puzzle, Square, Terminal, Trash2, XCircle } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useStore } from "../store";
+import { buildAndRestart } from "../actions";
+import { useBusy, useStore } from "../store";
 import { Button, fmtTime } from "./ui";
 
 export function StepIcon({ status }: { status: StepStatus }) {
@@ -39,6 +40,38 @@ function TaskIcon({ task, size = 16 }: { task: TaskState; size?: number }) {
     if (task.status === "success") return <CheckCircle2 size={size} style={{ color: "var(--green)", flex: "none" }} />;
     if (task.status === "cancelled") return <Ban size={size} style={{ color: "var(--yellow)", flex: "none" }} />;
     return <XCircle size={size} style={{ color: "var(--red)", flex: "none" }} />;
+}
+
+function BrokenPluginActions({ ids }: { ids: string[] }) {
+    const plugins = useStore(s => s.plugins);
+    const setPage = useStore(s => s.setPage);
+    const toast = useStore(s => s.toast);
+    const busy = useBusy();
+    const enabled = ids.filter(id => plugins.some(plugin => plugin.id === id && plugin.enabled));
+    if (!enabled.length) return null;
+    const names = enabled.map(id => plugins.find(plugin => plugin.id === id)?.name ?? id);
+
+    const disableAndRebuild = async () => {
+        for (const id of enabled) {
+            const result = await window.vu.plugins.setEnabled(id, false);
+            if (!result.ok) {
+                toast({ kind: "error", title: result.error ?? `Could not disable ${id}`, text: result.hint });
+                return;
+            }
+        }
+        await buildAndRestart();
+    };
+
+    return (
+        <div className="row wrap" style={{ marginTop: 12, gap: 8 }}>
+            <Button size="sm" variant="danger" icon={Ban} disabled={busy} onClick={disableAndRebuild}>
+                Disable {names.length === 1 ? `“${names[0]}”` : `${names.length} plugins`} &amp; rebuild
+            </Button>
+            <Button size="sm" variant="ghost" icon={Puzzle} onClick={() => setPage("plugins")}>
+                Open plugins
+            </Button>
+        </div>
+    );
 }
 
 export function TaskPanel({ task, compact }: { task: TaskState; compact?: boolean }) {
@@ -84,11 +117,16 @@ export function TaskPanel({ task, compact }: { task: TaskState; compact?: boolea
             {task.status === "error" && (
                 <div className="callout red">
                     <AlertTriangle size={15} />
-                    <div>
+                    <div className="grow">
                         <div style={{ fontWeight: 500 }} className="selectable">
                             {task.error}
                         </div>
-                        {task.hint && <div style={{ marginTop: 4, opacity: 0.85 }}>{task.hint}</div>}
+                        {task.hint && (
+                            <div className="selectable" style={{ marginTop: 4, opacity: 0.85, whiteSpace: "pre-line" }}>
+                                {task.hint}
+                            </div>
+                        )}
+                        {task.brokenPlugins?.length ? <BrokenPluginActions ids={task.brokenPlugins} /> : null}
                     </div>
                 </div>
             )}

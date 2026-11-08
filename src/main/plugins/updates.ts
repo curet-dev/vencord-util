@@ -10,7 +10,7 @@ import type { TaskContext } from "../core/tasks";
 import { findPluginIndex } from "./detect";
 import { copyPlugin, hashTree, removePath, tryRemovePath } from "./fsutil";
 import { cloneRepository, readSnapshot, remoteHead } from "./git";
-import { describePlugin, listPlugins, locatePlugin, savePluginSource } from "./library";
+import { clearBuildIssues, describePlugin, listPlugins, locatePlugin, savePluginSource } from "./library";
 import { download, fetchGithubTree } from "./remote";
 import { type GithubRepo, parseGithubRawUrl, parseGithubRepo } from "./source";
 import { fileRevision } from "./staging";
@@ -149,7 +149,10 @@ export async function updatePlugin(id: string, ctx: TaskContext): Promise<boolea
 
     const { changed, source } = plugin.isGit || !plugin.source ? await updateGitClone(plugin, ctx) : await updateFromSource(plugin, plugin.source, ctx);
     savePluginSource(id, source && (changed ? { ...source, updatedAt: Date.now() } : source));
-    if (changed) setConfig({ needsRebuild: true });
+    if (changed) {
+        clearBuildIssues(id);
+        setConfig({ needsRebuild: true });
+    }
     ctx.log(changed ? `${label}: updated` : `${label}: already up to date`, changed ? "success" : "info");
     notifyChanged("plugins", "config");
     return changed;

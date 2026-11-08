@@ -22,6 +22,9 @@
 | **Custom plugins**               | Install from GitHub links, folder links, single files, gists or ZIPs – or drag & drop folders, files and links onto the window.                                                       |
 | **Multi-plugin repositories**    | Repositories with several plugins or plugins in sub-folders are detected and offered in a selection dialog.                                                                           |
 | **Plugin updater**               | Compares the exact Git object of each plugin with GitHub. Only plugins that actually changed are flagged – one API request per repository.                                            |
+| **Link existing plugins**        | Plugins copied in by hand can be linked to their Git repository afterwards, so they get update checks too.                                                                            |
+| **Compatibility check**          | Warns before a Vencord update removes functions your plugins use, flags plugins that do not fit the installed version and names the plugin when a build fails.                        |
+| **App updates**                  | Checks for a new Vencord Util release on every start and installs it in place. Releases can set a minimum version that makes the update mandatory.                                    |
 | **Requirements**                 | Checks Git, Node.js and pnpm and installs missing tools via winget or Homebrew. A broken pnpm is replaced by an app-local copy.                                                       |
 | **Discord detection**            | Finds Stable, PTB, Canary and Development, shows the patch state and patches, unpatches or restarts each one.                                                                         |
 
@@ -29,11 +32,12 @@
 
 Grab the latest build from the [releases page](https://github.com/curet-dev/vencord-util/releases/latest):
 
-| Platform                      | File                                                            |
-| ----------------------------- | --------------------------------------------------------------- |
-| Windows (installer)           | `VencordUtil-<version>-win-x64-setup.exe` · `…-arm64-setup.exe` |
-| Windows (portable)            | `VencordUtil-<version>-win-x64-portable.exe`                    |
-| macOS (Apple Silicon & Intel) | `VencordUtil-<version>-mac-universal.dmg`                       |
+| Platform              | File                                                            |
+| --------------------- | --------------------------------------------------------------- |
+| Windows (installer)   | `VencordUtil-<version>-win-x64-setup.exe` · `…-arm64-setup.exe` |
+| Windows (portable)    | `VencordUtil-<version>-win-x64-portable.exe`                    |
+| macOS (Apple Silicon) | `VencordUtil-<version>-mac-arm64.dmg`                           |
+| macOS (Intel)         | `VencordUtil-<version>-mac-x64.dmg`                             |
 
 The builds are not code-signed:
 
@@ -90,8 +94,9 @@ Pure logic (asar format, patching, link parsing, plugin detection, hashing) has 
 ### Releasing
 
 1. Bump `version` in `package.json` and add a matching section to `CHANGELOG.md`.
-2. Push a tag: `git tag v0.2.0 && git push origin v0.2.0`.
-3. The [release workflow](.github/workflows/release.yml) builds Windows and macOS packages and publishes a GitHub release with the changelog section as release notes.
+2. Optional: raise `minimumVersion` in `package.json`. Installed apps older than that can only continue after updating.
+3. Push a tag: `git tag v0.2.0 && git push origin v0.2.0`.
+4. The [release workflow](.github/workflows/release.yml) builds Windows and macOS packages and publishes a GitHub release with the changelog section as release notes. It also uploads `update.json` (version, minimum version, release notes and SHA-512 checksums, see [`scripts/release-manifest.mjs`](scripts/release-manifest.mjs)), which the in-app updater reads from the latest release.
 
 ## License
 

@@ -1,7 +1,7 @@
 import type { EditableConfig } from "@shared/types";
-import { ExternalLink, FolderOpen, FolderSearch } from "lucide-react";
+import { ExternalLink, FolderOpen, FolderSearch, RefreshCw } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
-import { Button, Switch } from "../components/ui";
+import { Button, Switch, timeAgo } from "../components/ui";
 import { useBusy, useStore } from "../store";
 
 const DEFAULT_REPO = "https://github.com/Vendicated/Vencord";
@@ -57,6 +57,8 @@ export function SettingsPage() {
     const [repo, setRepo] = useState("");
     const [branch, setBranch] = useState("");
     const [version, setVersion] = useState("");
+    const [checkingApp, setCheckingApp] = useState(false);
+    const appUpdate = useStore(s => s.appUpdate);
 
     const savedRepo = config?.repoUrl;
     const savedBranch = config?.repoBranch;
@@ -80,6 +82,22 @@ export function SettingsPage() {
             toast({ kind: "error", title: (e as Error).message });
         }
     };
+
+    const checkAppUpdate = async () => {
+        setCheckingApp(true);
+        const state = await window.vu.appUpdate.check();
+        setCheckingApp(false);
+        useStore.setState({ appUpdateDismissed: false });
+        if (state.phase === "current") toast({ kind: "success", title: "Vencord Util is up to date" });
+        else if (state.phase === "error") toast({ kind: "error", title: "Update check failed", text: state.error });
+    };
+
+    const appUpdateNote =
+        appUpdate.phase === "available" && appUpdate.info
+            ? `Version ${appUpdate.info.version} is available.`
+            : appUpdate.checkedAt
+              ? `Checked for updates ${timeAgo(appUpdate.checkedAt)}.`
+              : "Updates are checked every time the app starts.";
 
     const repoChanged = repo.trim() !== config.repoUrl || branch.trim() !== config.repoBranch;
     const isDefaultRepo = config.repoUrl === DEFAULT_REPO && !config.repoBranch;
@@ -199,10 +217,21 @@ export function SettingsPage() {
                 <SettingCard
                     title={`Vencord Util v${version}`}
                     desc="Unofficial helper app, not affiliated with the Vencord project. Vencord is made by Vendicated and contributors (GPL-3.0)."
+                    note={appUpdateNote}
                     actions={
-                        <Button size="sm" variant="ghost" icon={ExternalLink} onClick={() => window.vu.openExternal("https://docs.vencord.dev/installing/")}>
-                            Vencord docs
-                        </Button>
+                        <>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                icon={ExternalLink}
+                                onClick={() => window.vu.openExternal("https://docs.vencord.dev/installing/")}
+                            >
+                                Vencord docs
+                            </Button>
+                            <Button size="sm" icon={RefreshCw} loading={checkingApp || appUpdate.phase === "checking"} onClick={checkAppUpdate}>
+                                Check for updates
+                            </Button>
+                        </>
                     }
                 />
             </div>

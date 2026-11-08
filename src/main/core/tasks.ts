@@ -1,5 +1,5 @@
 import type { LogLevel, StepStatus, TaskResult, TaskState, TaskStatus } from "@shared/types";
-import { hintFor } from "./errors";
+import { hintFor, PluginBuildError } from "./errors";
 import { emit, log } from "./events";
 import { ExecError, type ExecOptions, type ExecResult, exec } from "./exec";
 
@@ -92,7 +92,8 @@ export async function runTask<T>(title: string, steps: TaskStepDefinition[], run
         const cancelled = controller.signal.aborted;
         state.error = cancelled ? "Cancelled by user" : (error as Error).message;
         state.hint = cancelled ? undefined : hintFor(error);
-        if (error instanceof ExecError && error.output && !cancelled) {
+        if (error instanceof PluginBuildError && !cancelled) state.brokenPlugins = error.brokenPlugins;
+        if (error instanceof ExecError && error.output && !error.logged && !cancelled) {
             log("Last output:", "warn", state.id);
             log(error.output, "err", state.id);
         }

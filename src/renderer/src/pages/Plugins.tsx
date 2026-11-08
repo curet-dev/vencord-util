@@ -1,7 +1,8 @@
-import type { UserPlugin } from "@shared/types";
+import type { PluginCompat, UserPlugin } from "@shared/types";
 import {
     AlertTriangle,
     ArrowDownToLine,
+    Ban,
     Cpu,
     FileCode2,
     FolderOpen,
@@ -19,6 +20,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { checkPluginUpdates, installPluginPaths, installPluginUrl } from "../actions";
+import { LinkSourceModal } from "../components/LinkSourceModal";
+import { BuildIssueList, CompatIssueList } from "../components/PluginIssues";
 import { RebuildBanner } from "../components/RebuildBanner";
 import { Badge, Button, confirmDialog, GithubIcon, Switch, timeAgo } from "../components/ui";
 import { act, useBusy, useStore } from "../store";
@@ -42,7 +45,47 @@ function avatarFor(name: string) {
 const displayName = (plugin: UserPlugin) => plugin.name ?? plugin.id.replace(/\.(tsx?|jsx?)$/, "");
 const sourceLink = (plugin: UserPlugin) => (plugin.source?.type === "local" ? undefined : plugin.source?.url?.replace(/\.git$/, ""));
 
-function PluginItem({ plugin }: { plugin: UserPlugin }) {
+function PluginWarnings({ plugin, current, upcoming }: { plugin: UserPlugin; current?: PluginCompat; upcoming?: PluginCompat }) {
+    if (!plugin.enabled) return null;
+    if (plugin.buildIssues?.length) {
+        return (
+            <div className="callout red" style={{ marginTop: 10 }}>
+                <Ban size={14} />
+                <div className="grow">
+                    <div style={{ fontWeight: 500 }}>This plugin broke the last build. Update it or disable it.</div>
+                    <BuildIssueList issues={plugin.buildIssues} />
+                </div>
+            </div>
+        );
+    }
+    return (
+        <>
+            {current && (
+                <div className="callout red" style={{ marginTop: 10 }}>
+                    <Ban size={14} />
+                    <div className="grow">
+                        <div style={{ fontWeight: 500 }}>Not compatible with your Vencord version – the build will fail.</div>
+                        <CompatIssueList issues={current.issues} />
+                    </div>
+                </div>
+            )}
+            {upcoming && (
+                <div className="callout yellow" style={{ marginTop: 10 }}>
+                    <AlertTriangle size={14} />
+                    <div className="grow">
+                        <div style={{ fontWeight: 500 }}>The pending Vencord update removes functions this plugin needs.</div>
+                        <CompatIssueList issues={upcoming.issues} />
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
+
+function PluginItem({ plugin, onLink }: { plugin: UserPlugin; onLink(): void }) {
+    const current = useStore(s => s.compat?.current.find(entry => entry.id === plugin.id));
+    const upcoming = useStore(s => s.compat?.update?.plugins.find(entry => entry.id === plugin.id));
+    const broken = plugin.enabled && (Boolean(plugin.buildIssues?.length) || Boolean(current));
     const busy = useBusy();
     const toast = useStore(s => s.toast);
     const name = displayName(plugin);
@@ -82,6 +125,8 @@ function PluginItem({ plugin }: { plugin: UserPlugin }) {
                 <div className="row" style={{ gap: 8 }}>
                     <span className="plugin-name">{name}</span>
                     {update?.available && <Badge color="accent">Update available</Badge>}
+                    {broken && <Badge color="red">{plugin.buildIssues?.length ? "Breaks the build" : "Incompatible"}</Badge>}
+                    {!broken && plugin.enabled && upcoming && <Badge color="yellow">Breaks with update</Badge>}
                     {!plugin.enabled && <Badge noDot>Disabled</Badge>}
                 </div>
                 {plugin.description && <div className="plugin-desc">{plugin.description}</div>}
@@ -99,7 +144,7 @@ function PluginItem({ plugin }: { plugin: UserPlugin }) {
                             </span>
                         </span>
                     ) : (
-                        <span className="chip">
+                        <span className="chip" title="Not linked to a repository – no update checks">
                             <HardDrive size={12} /> Local
                         </span>
                     )}
@@ -130,6 +175,7 @@ function PluginItem({ plugin }: { plugin: UserPlugin }) {
                         <AlertTriangle size={13} /> {update.error}
                     </div>
                 )}
+                <PluginWarnings plugin={plugin} current={current} upcoming={upcoming} />
                 {update?.untracked && (
                     <div className="small faint" style={{ marginTop: 8 }}>
                         Not tracked yet – update once to enable update checks.
@@ -145,6 +191,17 @@ function PluginItem({ plugin }: { plugin: UserPlugin }) {
                     plugin.updatable && (
                         <Button size="sm" variant="ghost" iconOnly icon={ArrowDownToLine} title="Fetch latest version" disabled={busy} onClick={runUpdate} />
                     )
+                )}
+                {!plugin.isGit && (
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        iconOnly
+                        icon={link ? GitBranch : Link2}
+                        title={link ? "Change linked repository" : "Link Git repository (enables updates)"}
+                        disabled={busy}
+                        onClick={onLink}
+                    />
                 )}
                 <Button size="sm" variant="ghost" iconOnly icon={FolderOpen} title="Show in folder" onClick={() => window.vu.showItem(plugin.path)} />
                 <Button size="sm" variant="ghost" iconOnly icon={Trash2} title="Delete" disabled={busy} onClick={remove} />
@@ -231,16 +288,19 @@ export function PluginsPage() {
     const refresh = useStore(s => s.refresh);
     const setPage = useStore(s => s.setPage);
     const busy = useBusy();
+    const refreshCompat = useStore(s => s.refreshCompat);
     const [query, setQuery] = useState("");
     const [checking, setChecking] = useState(false);
+    const [linking, setLinking] = useState<string | null>(null);
+    const linkingPlugin = plugins.find(plugin => plugin.id === linking);
 
     const installed = Boolean(vencord?.isVencord);
     const hasUpdatable = plugins.some(plugin => plugin.updatable);
     const pending = plugins.filter(plugin => plugin.update?.available || plugin.update?.untracked).length;
 
     useEffect(() => {
-        refresh("plugins", "vencord");
-    }, [refresh]);
+        refresh("plugins", "vencord").then(() => refreshCompat());
+    }, [refresh, refreshCompat]);
 
     useEffect(() => {
         if (installed && Date.now() - (useStore.getState().config?.lastPluginCheck ?? 0) > AUTO_CHECK_INTERVAL_MS) checkPluginUpdates(true);
@@ -337,13 +397,14 @@ export function PluginsPage() {
                         )}
                     </div>
                 ) : (
-                    filtered.map(plugin => <PluginItem key={`${plugin.enabled}-${plugin.id}`} plugin={plugin} />)
+                    filtered.map(plugin => <PluginItem key={`${plugin.enabled}-${plugin.id}`} plugin={plugin} onLink={() => setLinking(plugin.id)} />)
                 )}
             </div>
             <p className="small faint" style={{ marginTop: 12 }}>
                 Disabled plugins are moved to <code>src/userplugins/.disabled</code> and excluded from the build. You can also toggle plugins as usual in
                 Discord's Vencord settings.
             </p>
+            {linkingPlugin && <LinkSourceModal plugin={linkingPlugin} onClose={() => setLinking(null)} />}
         </>
     );
 }

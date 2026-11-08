@@ -6,6 +6,12 @@ type Invoke<C extends IpcChannel> = (...args: IpcArgs<C>) => Promise<IpcResult<C
 export interface VuApi {
     platform: string;
     info: Invoke<"app:info">;
+    quit: Invoke<"app:quit">;
+    appUpdate: {
+        state: Invoke<"appUpdate:state">;
+        check: Invoke<"appUpdate:check">;
+        install: Invoke<"appUpdate:install">;
+    };
     getConfig: Invoke<"config:get">;
     setConfig: Invoke<"config:set">;
     getLogs: Invoke<"logs:get">;
@@ -34,6 +40,7 @@ export interface VuApi {
         build: Invoke<"vencord:build">;
         checkUpdates: Invoke<"vencord:checkUpdates">;
         update: Invoke<"vencord:update">;
+        compat: Invoke<"vencord:compat">;
     };
     plugins: {
         list: Invoke<"plugins:list">;
@@ -46,6 +53,7 @@ export interface VuApi {
         checkUpdates: Invoke<"plugins:checkUpdates">;
         update: Invoke<"plugins:update">;
         updateAll: Invoke<"plugins:updateAll">;
+        linkSource: Invoke<"plugins:linkSource">;
     };
     getPathForFile(file: File): string;
     onEvent(listener: (event: AppEvent) => void): () => void;

@@ -1,6 +1,7 @@
 import type { StagedCandidate } from "@shared/types";
 import { FileCode2, Folder, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { warnIfIncompatible } from "../actions";
 import { useStore } from "../store";
 import { Badge, Button, Checkbox, Modal } from "./ui";
 
@@ -84,6 +85,7 @@ export function PluginSelectModal() {
         setStage(null);
         const count = result.data?.length ?? 0;
         toast({ kind: "success", title: `Installed ${count} ${count === 1 ? "plugin" : "plugins"}`, text: "Rebuild Vencord so Discord picks up the changes." });
+        warnIfIncompatible(result.data ?? []);
     };
 
     return (
